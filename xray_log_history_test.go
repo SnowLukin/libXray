@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
-
-	"github.com/xtls/libxray/nodep"
 )
 
 type logHistoryStateResponse struct {
@@ -27,7 +25,7 @@ func TestConfigureLogHistoryUsesCallResponseABI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var configured nodep.CallResponse[string]
+	var configured base64CallResponse
 	decodeCallResponse(t, ConfigureLogHistory(base64.StdEncoding.EncodeToString(config)), &configured)
 	if !configured.Success {
 		t.Fatalf("configure failed: %s", configured.Err)
@@ -41,7 +39,7 @@ func TestConfigureLogHistoryUsesCallResponseABI(t *testing.T) {
 }
 
 func TestConfigureLogHistoryRejectsInvalidBase64(t *testing.T) {
-	var response nodep.CallResponse[string]
+	var response base64CallResponse
 	decodeCallResponse(t, ConfigureLogHistory("%%%"), &response)
 	if response.Success || response.Err == "" {
 		t.Fatalf("invalid request was accepted: %#v", response)
