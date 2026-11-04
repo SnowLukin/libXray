@@ -31,18 +31,21 @@ func startLoopLocked() {
 	}
 	stop := make(chan struct{})
 	stopLoop = stop
-	go func(interval time.Duration) {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+	// The pause counts from the end of the previous collection, so a slow
+	// collection never makes them run back to back.
+	go func(interval time.Duration, free func()) {
+		timer := time.NewTimer(interval)
+		defer timer.Stop()
 		for {
 			select {
 			case <-stop:
 				return
-			case <-ticker.C:
-				freeOSMemory()
+			case <-timer.C:
+				free()
+				timer.Reset(interval)
 			}
 		}
-	}(loopInterval)
+	}(loopInterval, freeOSMemory)
 }
 
 func stopLoopLocked() {
