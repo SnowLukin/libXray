@@ -9,27 +9,73 @@ import (
 )
 
 const (
-	interval = 1
+	defaultInterval = time.Second
 	// 30M
 	maxMemory = 30 * 1024 * 1024
 )
 
-var initForceFreeOnce sync.Once
+var (
+	initForceFreeOnce sync.Once
 
-func forceFree(interval time.Duration) {
-	go func() {
+	loopMu       sync.Mutex
+	loopInterval = defaultInterval
+	loopStarted  bool
+	stopLoop     chan struct{}
+
+	freeOSMemory = debug.FreeOSMemory
+)
+
+func startLoopLocked() {
+	if !loopStarted || loopInterval <= 0 {
+		return
+	}
+	stop := make(chan struct{})
+	stopLoop = stop
+	// The pause counts from the end of the previous collection, so a slow
+	// collection never makes them run back to back.
+	go func(interval time.Duration, free func()) {
+		timer := time.NewTimer(interval)
+		defer timer.Stop()
 		for {
-			time.Sleep(interval)
-			debug.FreeOSMemory()
+			select {
+			case <-stop:
+				return
+			case <-timer.C:
+				free()
+				timer.Reset(interval)
+			}
 		}
-	}()
+	}(loopInterval, freeOSMemory)
+}
+
+func stopLoopLocked() {
+	if stopLoop != nil {
+		close(stopLoop)
+		stopLoop = nil
+	}
+}
+
+// SetForceFreeInterval sets how often the process returns memory to the OS
+// with debug.FreeOSMemory; zero or a negative interval stops the loop. Called
+// before the first xray start, it sets the interval the loop starts with.
+func SetForceFreeInterval(interval time.Duration) {
+	loopMu.Lock()
+	defer loopMu.Unlock()
+	if interval == loopInterval {
+		return
+	}
+	loopInterval = interval
+	stopLoopLocked()
+	startLoopLocked()
 }
 
 func InitForceFree() {
 	initForceFreeOnce.Do(func() {
 		debug.SetGCPercent(10)
 		debug.SetMemoryLimit(maxMemory)
-		duration := time.Duration(interval) * time.Second
-		forceFree(duration)
+		loopMu.Lock()
+		defer loopMu.Unlock()
+		loopStarted = true
+		startLoopLocked()
 	})
 }
