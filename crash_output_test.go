@@ -42,7 +42,8 @@ func runCrashingChild(t *testing.T, kind string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "go-crash.txt")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCrashOutputHelper$")
-	cmd.Env = append(os.Environ(), crashHelperEnv+"="+kind, "LIBXRAY_CRASH_OUTPUT_PATH="+path)
+	// The same traceback level the runtime forces in an Android app process.
+	cmd.Env = append(os.Environ(), crashHelperEnv+"="+kind, "LIBXRAY_CRASH_OUTPUT_PATH="+path, "GOTRACEBACK=none")
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("child did not crash:\n%s", output)

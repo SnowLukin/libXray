@@ -20,5 +20,12 @@ func SetCrashOutput(path string) error {
 	}
 	// SetCrashOutput keeps its own duplicate of the descriptor.
 	defer file.Close()
-	return debug.SetCrashOutput(file, debug.CrashOptions{})
+	if err := debug.SetCrashOutput(file, debug.CrashOptions{}); err != nil {
+		return err
+	}
+	// Android starts app processes with AT_SECURE set, and in that mode the
+	// runtime forces GOTRACEBACK=none: a panic would leave only its first
+	// line, without the goroutine that panicked.
+	debug.SetTraceback("single")
+	return nil
 }
